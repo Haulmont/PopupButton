@@ -211,8 +211,9 @@ public class VPopupButton extends VButton {
 
 		private void checkForRTE(Widget popupComponentWidget2) {
 			if (popupComponentWidget2 instanceof VRichTextArea) {
-				((VRichTextArea) popupComponentWidget2)
-						.synchronizeContentToServer();
+//              disable trick with VRichTextArea
+//				((VRichTextArea) popupComponentWidget2)
+//						.synchronizeContentToServer();
 			} else if (popupComponentWidget2 instanceof HasWidgets) {
 				HasWidgets hw = (HasWidgets) popupComponentWidget2;
 				Iterator<Widget> iterator = hw.iterator();

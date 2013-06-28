@@ -99,7 +99,7 @@ public class PopupButton extends Button implements SingleComponentContainer {
 	 * 
 	 * @param component
 	 *            the component to be displayed in the popup.
-	 * @deprecated Use {@link setContent(Component content)} instead
+	 * @deprecated Use {@link #setContent(Component content)} instead
 	 */
 	@Deprecated
 	public void setComponent(Component component) {

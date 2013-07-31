@@ -138,7 +138,7 @@ public class VPopupButton extends VButton {
 		private boolean hiding = false;
 
 		public LayoutPopup() {
-			super(false, false, true);
+			super(true, false, true);
 			setOwner(VPopupButton.this);
 			setStyleName(CLASSNAME);
 		}

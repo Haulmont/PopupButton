@@ -5,14 +5,10 @@ import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.Iterator;
 
+import com.vaadin.ui.*;
 import org.vaadin.hene.popupbutton.widgetset.client.ui.PopupButtonServerRpc;
 import org.vaadin.hene.popupbutton.widgetset.client.ui.PopupButtonState;
 
-import com.vaadin.ui.AbstractSingleComponentContainer;
-import com.vaadin.ui.Button;
-import com.vaadin.ui.Component;
-import com.vaadin.ui.ComponentContainer;
-import com.vaadin.ui.SingleComponentContainer;
 import com.vaadin.util.ReflectTools;
 
 /**
@@ -38,6 +34,9 @@ public class PopupButton extends Button implements SingleComponentContainer {
 
 	private Component component;
 
+    // This is here for getter because in the state we store int bitmask only
+    private Alignment direction;
+
 	// These can be used by extending PopupButton.
 	// It's possible that these are removed in future versions or functionality
 	// is changed.
@@ -55,16 +54,18 @@ public class PopupButton extends Button implements SingleComponentContainer {
 
 	public PopupButton() {
 		registerRpc(rpc);
+        setDirection(Alignment.BOTTOM_RIGHT);
 	}
 
 	public PopupButton(String caption) {
 		super(caption);
 		registerRpc(rpc);
+        setDirection(Alignment.BOTTOM_RIGHT);
 	}
 
 	@Override
 	public Iterator<Component> iterator() {
-		if (component != null) {
+        if (isPopupVisible() && getContent() != null) {
 			return Collections.singletonList(component).iterator();
 		} else {
 			return Collections.<Component> emptyList().iterator();
@@ -80,6 +81,23 @@ public class PopupButton extends Button implements SingleComponentContainer {
 	public void setPopupVisible(boolean popupVisible) {
 		if (getState().popupVisible != popupVisible) {
 			getState().popupVisible = popupVisible;
+
+            if (component == null) {
+                return;
+            }
+
+            if (popupVisible) {
+                if (component.getParent() != null && component.getParent() != this) {
+                    // If the component already has a parent, try to remove it
+                    AbstractSingleComponentContainer
+                            .removeFromParent(component);
+                }
+                component.setParent(this);
+            } else {
+                if (component.getParent() == this) {
+                    component.setParent(null);
+                }
+            }
 			fireEvent(new PopupVisibilityEvent(this));
 			markAsDirty();
 		}
@@ -99,7 +117,7 @@ public class PopupButton extends Button implements SingleComponentContainer {
 	 * 
 	 * @param component
 	 *            the component to be displayed in the popup.
-	 * @deprecated Use {@link #setContent(Component content)} instead
+     * @deprecated Use {@link #setContent(com.vaadin.ui.Component)}  instead
 	 */
 	@Deprecated
 	public void setComponent(Component component) {
@@ -113,27 +131,51 @@ public class PopupButton extends Button implements SingleComponentContainer {
 
 	@Override
 	public void setContent(Component content) {
-		Component oldContent = getContent();
-		if (oldContent == content) {
-			// do not set the same content twice
-			return;
-		}
-		if (oldContent != null && oldContent.getParent() == this) {
-			oldContent.setParent(null);
-			fireEvent(new ComponentDetachEvent(this, content));
-		}
-		this.component = content;
-		if (content != null) {
-			AbstractSingleComponentContainer.removeFromParent(content);
-
-			content.setParent(this);
-			fireEvent(new ComponentAttachEvent(this, content));
+        component = content;
+        markAsDirty();
 		}
 
-		markAsDirty();
+    /**
+     * Gets popup's opening direction.
+     */
+    public Alignment getDirection() {
+        return direction;
+		}
+
+    /**
+     * Sets opening direction for the popup. At the moment only support values are
+     * {@link com.vaadin.ui.Alignment#BOTTOM_LEFT}, {@link com.vaadin.ui.Alignment#BOTTOM_CENTER} and
+     * {@link com.vaadin.ui.Alignment#BOTTOM_RIGHT}.
+     *
+     * Default is {@link com.vaadin.ui.Alignment#BOTTOM_RIGHT}.
+     */
+    public void setDirection(final Alignment direction) {
+        if (direction == null) {
+            throw new IllegalArgumentException("direction cannot be null");
+		}
+
+        this.direction = direction;
+        getState().direction = direction.getBitMask();
 	}
 
 	/**
+     * Is visibility of the popup toggled on a button click?
+     */
+    public boolean isButtonClickTogglesPopupVisibility() {
+        return getState().buttonClickTogglesPopupVisibility;
+    }
+
+    /**
+     * If true, clicking the button toggles visibility of the popup:
+     * a visible popup will be hidden, and an invisible popup will be shown.
+     *
+     * Default is true.
+     */
+    public void setButtonClickTogglesPopupVisibility(boolean buttonClickTogglesPopupVisibility) {
+        getState().buttonClickTogglesPopupVisibility = buttonClickTogglesPopupVisibility;
+    }
+
+    /**
 	 * Add a listener that is called whenever the visibility of the popup is
 	 * changed.
 	 * 
@@ -204,21 +246,21 @@ public class PopupButton extends Button implements SingleComponentContainer {
 	 */
 	public interface PopupVisibilityListener extends Serializable {
 		/**
-		 * Pass to {@link PopupButton#PopupVisibilityEvent} to start listening
+         * Pass to {@link PopupButton.PopupVisibilityEvent} to start listening
 		 * for popup visibility changes.
 		 * 
 		 * @param event
 		 *            the event
 		 * 
-		 * @see {@link PopupVisibilityEvent}
-		 * @see {@link PopupButton#addPopupVisibilityListener(PopupVisibilityListener)}
+         * @see PopupVisibilityEvent
+         * @see PopupButton#addPopupVisibilityListener(PopupVisibilityListener)
 		 */
 		public void popupVisibilityChange(PopupVisibilityEvent event);
 	}
 
 	@Override
 	public int getComponentCount() {
-		return (component != null ? 1 : 0);
+        return (isPopupVisible() && getContent() != null ? 1 : 0);
 	}
 
 	@Override

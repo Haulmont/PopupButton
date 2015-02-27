@@ -1,10 +1,5 @@
 package org.vaadin.hene.popupbutton.widgetset.client.ui;
 
-import java.util.Collections;
-import java.util.List;
-
-import org.vaadin.hene.popupbutton.PopupButton;
-
 import com.google.gwt.core.client.GWT;
 import com.google.gwt.dom.client.Element;
 import com.google.gwt.event.dom.client.ClickEvent;
@@ -13,29 +8,24 @@ import com.google.gwt.user.client.Event;
 import com.google.gwt.user.client.Event.NativePreviewEvent;
 import com.google.gwt.user.client.Event.NativePreviewHandler;
 import com.google.gwt.user.client.ui.Widget;
-import com.vaadin.client.ComponentConnector;
-import com.vaadin.client.ConnectorHierarchyChangeEvent;
+import com.vaadin.client.*;
 import com.vaadin.client.ConnectorHierarchyChangeEvent.ConnectorHierarchyChangeHandler;
-import com.vaadin.client.HasComponentsConnector;
-import com.vaadin.client.VCaption;
-import com.vaadin.client.VCaptionWrapper;
 import com.vaadin.client.communication.RpcProxy;
 import com.vaadin.client.communication.StateChangeEvent;
-import com.vaadin.client.ui.PostLayoutListener;
-import com.vaadin.client.ui.VPopupView;
 import com.vaadin.client.ui.button.ButtonConnector;
 import com.vaadin.shared.ui.Connect;
+import org.vaadin.hene.popupbutton.PopupButton;
+
+import java.util.Collections;
+import java.util.List;
 
 @SuppressWarnings("serial")
 @Connect(PopupButton.class)
 public class PopupButtonConnector extends ButtonConnector implements
-		HasComponentsConnector, ConnectorHierarchyChangeHandler,
-		PostLayoutListener, NativePreviewHandler {
+		HasComponentsConnector, ConnectorHierarchyChangeHandler, NativePreviewHandler {
 
 	private PopupButtonServerRpc rpc = RpcProxy.create(
 			PopupButtonServerRpc.class, this);
-
-	private boolean popupVisible = false;
 
 	private HandlerRegistration nativePreviewHandler;
 
@@ -60,7 +50,7 @@ public class PopupButtonConnector extends ButtonConnector implements
 
 	@Override
 	public void onClick(ClickEvent event) {
-		if (!popupVisible && isEnabled()) {
+        if (!getState().popupVisible && isEnabled() && getState().buttonClickTogglesPopupVisibility) {
 			rpc.setPopupVisible(true);
 		}
 		super.onClick(event);
@@ -70,58 +60,18 @@ public class PopupButtonConnector extends ButtonConnector implements
 	public void onStateChanged(StateChangeEvent stateChangeEvent) {
 		super.onStateChanged(stateChangeEvent);
 		getWidget().addStyleName(VPopupButton.CLASSNAME);
-
-		// getWidget().position = uidl.getStringAttribute("position");
-		// getWidget().xOffset = uidl.getIntAttribute("xoffset");
-		// getWidget().yOffset = uidl.getIntAttribute("yoffset");
-
-		if (getState().popupVisible) {
-			if (getState().popupPositionConnector != null) {
-				getWidget().popupPositionWidget = ((ComponentConnector) getState().popupPositionConnector)
-						.getWidget();
-			} else {
-				getWidget().popupPositionWidget = null;
 			}
-
-			if (getState().styles != null && !getState().styles.isEmpty()) {
-				final StringBuffer styleBuf = new StringBuffer();
-				final String primaryName = getWidget().popup
-						.getStylePrimaryName();
-				styleBuf.append(primaryName);
-				styleBuf.append(" ");
-				styleBuf.append(VPopupView.CLASSNAME + "-popup");
-				for (String style : getState().styles) {
-					styleBuf.append(" ");
-					styleBuf.append(primaryName);
-					styleBuf.append("-");
-					styleBuf.append(style);
-				}
-				getWidget().popup.setStyleName(styleBuf.toString());
-			} else {
-				getWidget().popup.setStyleName(getWidget().popup
-						.getStylePrimaryName()
-						+ " "
-						+ VPopupView.CLASSNAME
-						+ "-popup");
-			}
-
-			getWidget().popup.setVisible(false);
-			getWidget().popup.show();
-			popupVisible = true;
-		} else {
-			getWidget().setPopupInvisible();
-			popupVisible = false;
-		}
-	}
 
 	public void onConnectorHierarchyChange(ConnectorHierarchyChangeEvent event) {
-		if (childrenComponentConnector == null) {
+        if (getChildComponents().isEmpty()) {
 			getWidget().hidePopup();
 			getWidget().popup.setWidget(null);
 		} else {
+            getWidget().popup.show();
 			getWidget().popup.setVisible(false);
-			getWidget().popup.show();
 			getWidget().popup.setWidget(childrenComponentConnector.getWidget());
+            getWidget().setPopupStyleNames(getState().styles);
+            getWidget().showPopup();
 		}
 	}
 
@@ -185,14 +135,6 @@ public class PopupButtonConnector extends ButtonConnector implements
 				ConnectorHierarchyChangeEvent.TYPE, handler);
 	}
 
-	public void postLayout() {
-		if (popupVisible) {
-			getWidget().showPopup();
-		} else {
-			getWidget().setPopupInvisible();
-		}
-	}
-
 	public void onPreviewNativeEvent(NativePreviewEvent event) {
 		if (isEnabled()) {
 			Element target = Element
@@ -200,7 +142,8 @@ public class PopupButtonConnector extends ButtonConnector implements
 			switch (event.getTypeInt()) {
 			case Event.ONCLICK:
 				if (getWidget().isOrHasChildOfButton(target)) {
-					if (popupVisible) {
+                    if (getState().popupVisible && getState().buttonClickTogglesPopupVisibility) {
+                        getWidget().sync();
 						rpc.setPopupVisible(false);
 					}
 				}
@@ -209,19 +152,25 @@ public class PopupButtonConnector extends ButtonConnector implements
 				if (!getWidget().isOrHasChildOfPopup(target)
 						&& !getWidget().isOrHasChildOfConsole(target)
 						&& !getWidget().isOrHasChildOfButton(target)) {
-					if (popupVisible) {
+                    if (getState().popupVisible) {
+                        getWidget().sync();
 						rpc.setPopupVisible(false);
 					}
 				}
 				break;
 			case Event.ONKEYPRESS:
-				// if (getWidget().isOrHasChildOfPopup(target)) {
-				// // Catch children that use keyboard, so we can unfocus
-				// // them
-				// // when
-				// // hiding
-				// activeChildren.add(target);
-				// }
+                if (getWidget().isOrHasChildOfPopup(target)) {
+                    // Catch children that use keyboard, so we can unfocus
+                    // them
+                    // when
+                    // hiding
+                    getWidget().addToActiveChildren(target);
+                }
+                break;
+            case Event.ONKEYDOWN:
+                if (getState().popupVisible) {
+                    getWidget().onKeyDownOnVisiblePopup(event.getNativeEvent(), this);
+                }
 				break;
 			default:
 				break;

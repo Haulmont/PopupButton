@@ -1,24 +1,29 @@
 package org.vaadin.hene.popupbutton.widgetset.client.ui;
 
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.Set;
-
 import com.google.gwt.core.client.Scheduler;
 import com.google.gwt.core.client.Scheduler.ScheduledCommand;
 import com.google.gwt.dom.client.DivElement;
 import com.google.gwt.dom.client.Document;
 import com.google.gwt.dom.client.Element;
+import com.google.gwt.dom.client.NativeEvent;
+import com.google.gwt.user.client.Event;
 import com.google.gwt.user.client.Window;
 import com.google.gwt.user.client.ui.Focusable;
 import com.google.gwt.user.client.ui.HasWidgets;
 import com.google.gwt.user.client.ui.Widget;
+import com.vaadin.client.ComponentConnector;
+import com.vaadin.client.Util;
 import com.vaadin.client.VCaptionWrapper;
-import com.vaadin.client.ui.VButton;
-import com.vaadin.client.ui.VOverlay;
-import com.vaadin.client.ui.VRichTextArea;
+import com.vaadin.client.debug.internal.VDebugWindow;
+import com.vaadin.client.ui.*;
+import com.vaadin.shared.ui.AlignmentInfo;
 
-// This class contains code from the VPopupView class.  
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Set;
+
+// This class contains code from the VPopupView class.
 public class VPopupButton extends VButton {
 
 	/** Set the CSS class name to allow styling. */
@@ -36,6 +41,10 @@ public class VPopupButton extends VButton {
 
 	protected Widget popupPositionWidget;
 
+    private final Set<Element> activeChildren = new HashSet<Element>();
+
+    private AlignmentInfo direction;
+
 	public VPopupButton() {
 		super();
 		DivElement e = Document.get().createDivElement();
@@ -51,7 +60,7 @@ public class VPopupButton extends VButton {
 		}
 	}
 
-	void showPopup() {
+	public void showPopup() {
 		Scheduler.get().scheduleDeferred(new ScheduledCommand() {
 
 			public void execute() {
@@ -59,6 +68,11 @@ public class VPopupButton extends VButton {
 					int extra = 20;
 
 					int left = getPopupPositionWidget().getAbsoluteLeft();
+                    if (direction.isHorizontalCenter()) {
+                        left -= (popup.getOffsetWidth() - getPopupPositionWidget().getOffsetWidth()) / 2;
+                    } else if (direction.isLeft()) {
+                        left -= popup.getOffsetWidth() - getPopupPositionWidget().getOffsetWidth();
+                    }
 					int top = getPopupPositionWidget().getAbsoluteTop()
 							+ getPopupPositionWidget().getOffsetHeight();
 					int browserWindowWidth = Window.getClientWidth()
@@ -116,7 +130,7 @@ public class VPopupButton extends VButton {
 		});
 	}
 
-	void hidePopup() {
+	public void hidePopup() {
 		popup.setVisible(false);
 		popup.hide();
 	}
@@ -128,14 +142,29 @@ public class VPopupButton extends VButton {
 	    }
 	}-*/;
 
+    public void sync() {
+        popup.syncChildren();
+    }
+
+    public void onKeyDownOnVisiblePopup(NativeEvent nativeEvent, ComponentConnector target) {
+        if (popup.shortcutActionHandler != null) {
+            popup.shortcutActionHandler.handleKeyboardEvent(Event.as(nativeEvent), target);
+        }
+    }
+
+    // Called by @DelegateToWidget
+    public void setDirection(int direction) {
+        this.direction = new AlignmentInfo(direction);
+    }
+
 	class LayoutPopup extends VOverlay {
 
 		public static final String CLASSNAME = VPopupButton.CLASSNAME
 				+ "-popup";
 
-		private final Set<Element> activeChildren = new HashSet<Element>();
-
 		private boolean hiding = false;
+
+        private ShortcutActionHandler shortcutActionHandler;
 
 		public LayoutPopup() {
 			super(true, false, true);
@@ -179,12 +208,27 @@ public class VPopupButton extends VButton {
 		public void hide(boolean autoClosed) {
 			hiding = true;
 			syncChildren();
+            shortcutActionHandler = null;
 			super.hide(autoClosed);
 		}
 
 		@Override
 		public void show() {
 			hiding = false;
+
+            //  ** Copied from PopupView **
+            // Find the shortcut action handler that should handle keyboard
+            // events from the popup. The events do not propagate automatically
+            // because the popup is directly attached to the RootPanel.
+            Widget widget = VPopupButton.this;
+            while (shortcutActionHandler == null && widget != null) {
+                if (widget instanceof ShortcutActionHandler.ShortcutActionHandlerOwner) {
+                    shortcutActionHandler = ((ShortcutActionHandler.ShortcutActionHandlerOwner) widget)
+                            .getShortcutActionHandler();
+                }
+                widget = widget.getParent();
+            }
+
 			super.show();
 		}
 
@@ -204,6 +248,7 @@ public class VPopupButton extends VButton {
 				try {
 					nativeBlur(e);
 				} catch (Exception ignored) {
+                    Window.alert("" + ignored);
 				}
 			}
 			activeChildren.clear();
@@ -211,9 +256,11 @@ public class VPopupButton extends VButton {
 
 		private void checkForRTE(Widget popupComponentWidget2) {
 			if (popupComponentWidget2 instanceof VRichTextArea) {
-//              disable trick with VRichTextArea
-//				((VRichTextArea) popupComponentWidget2)
-//						.synchronizeContentToServer();
+                ComponentConnector rtaConnector = Util
+                        .findConnectorFor(popupComponentWidget2);
+                if (rtaConnector != null) {
+                    rtaConnector.flush();
+                }
 			} else if (popupComponentWidget2 instanceof HasWidgets) {
 				HasWidgets hw = (HasWidgets) popupComponentWidget2;
 				Iterator<Widget> iterator = hw.iterator();
@@ -241,23 +288,59 @@ public class VPopupButton extends VButton {
 	}
 
 	public boolean isOrHasChildOfPopup(Element element) {
-		return popup.getElement().isOrHasChild(element);
+        boolean isOverlay = popup.getOverlayContainer().isOrHasChild(element);
+
+        if (isOverlay) {
+            while (element != null) {
+                try {
+                    if (element.getClassName().contains("v-window")) {
+                        return false;
 	}
+                } catch (Exception e) {
+                    // If the popup contains an svg element, an exception will
+                    // be thrown when then element is clicked because the type
+                    // of className attribute in an SVG element is not String
+                }
+                element = element.getParentElement();
+            }
+            return true;
+        }
+
+        return false;
+    }
 
 	public boolean isOrHasChildOfButton(Element element) {
 		return getElement().isOrHasChild(element);
 	}
 
-	// Unclear what should happen here. ApplicationConnection.getConsole() gone
 	public boolean isOrHasChildOfConsole(Element element) {
-		// Console console = ApplicationConnection.getConsole();
-		// return console instanceof VDebugConsole
-		// && ((VDebugConsole) console).getElement().isOrHasChild(
-		// element);
-		return false;
+        return VDebugWindow.get().getElement().isOrHasChild(element);
 	}
 
-	public void setPopupInvisible() {
-		popup.setVisible(false);
+    public void setPopupStyleNames(List<String> styleNames) {
+        if (styleNames != null && !styleNames.isEmpty()) {
+            final StringBuffer styleBuf = new StringBuffer();
+            final String primaryName = popup.getStylePrimaryName();
+            styleBuf.append(primaryName);
+            styleBuf.append(" ");
+            styleBuf.append(VPopupView.CLASSNAME + "-popup");
+            for (String style : styleNames) {
+                styleBuf.append(" ");
+                styleBuf.append(primaryName);
+                styleBuf.append("-");
+                styleBuf.append(style);
+            }
+            popup.setStyleName(styleBuf.toString());
+        } else {
+            popup.setStyleName(popup
+                    .getStylePrimaryName()
+                    + " "
+                    + VPopupView.CLASSNAME
+                    + "-popup");
+        }
+    }
+
+    public void addToActiveChildren(Element e) {
+        activeChildren.add(e);
 	}
 }

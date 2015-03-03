@@ -295,7 +295,7 @@ public class VPopupButton extends VButton {
                 try {
                     if (element.getClassName().contains("v-window")) {
                         return false;
-	}
+	                }
                 } catch (Exception e) {
                     // If the popup contains an svg element, an exception will
                     // be thrown when then element is clicked because the type
@@ -307,6 +307,15 @@ public class VPopupButton extends VButton {
         }
 
         return false;
+    }
+
+    /**
+     * Simply check if popup has child equal to passed element <br/>
+     *
+     * Haulmont API
+     */
+    public boolean popupHasChild(Element element) {
+        return popup.getElement().isOrHasChild(element);
     }
 
 	public boolean isOrHasChildOfButton(Element element) {

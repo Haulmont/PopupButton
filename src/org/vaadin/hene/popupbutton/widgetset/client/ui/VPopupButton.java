@@ -126,11 +126,13 @@ public class VPopupButton extends VButton {
 					popup.setShadowStyle("fixed");
 					popup.setVisible(true);
 				}
+
+                onPopupOpened();
 			}
 		});
 	}
 
-	public void hidePopup() {
+    public void hidePopup() {
 		popup.setVisible(false);
 		popup.hide();
 	}
@@ -157,7 +159,7 @@ public class VPopupButton extends VButton {
         this.direction = new AlignmentInfo(direction);
     }
 
-	class LayoutPopup extends VOverlay {
+	public class LayoutPopup extends VOverlay {
 
 		public static final String CLASSNAME = VPopupButton.CLASSNAME
 				+ "-popup";
@@ -352,4 +354,13 @@ public class VPopupButton extends VButton {
     public void addToActiveChildren(Element e) {
         activeChildren.add(e);
 	}
+
+    // Haulmont API
+    public LayoutPopup getPopup() {
+        return popup;
+    }
+
+    // Haulmont API
+    protected void onPopupOpened() {
+    }
 }

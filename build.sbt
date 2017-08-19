@@ -4,9 +4,9 @@ import sbt.ScalaVersion
 
 name := "PopupButton"
 
-version in ThisBuild := "2.6.0.cuba.1"
+version in ThisBuild := "2.6.0.cuba.2"
 
-organization in ThisBuild := "org.vaadin.hene"
+organization in ThisBuild := "org.vaadin.addons"
 
 crossPaths in ThisBuild := false
 
